@@ -1,16 +1,13 @@
-# Azure Core & Identity
-azure-core>=1.24.0
-azure-identity>=1.12.0
+# Modern Unified Identity & Core Authentication
+azure-identity>=1.15.0
+azure-core>=1.30.0
 
-# Management SDK Packages
-azure-mgmt-core>=1.3.0
+# Pin Core management to prevent broken ADAL fallbacks
+azure-mgmt-core>=1.4.0
 azure-mgmt-resource>=23.0.0
-azure-mgmt-postgresqlflexibleservers>=1.0.0b1
-azure-mgmt-compute>=30.0.0
-azure-mgmt-network>=25.0.0
-azure-mgmt-storage>=21.0.0
 
-# Helper Libraries & CLI Core (Fixes the new auth error)
-msrest>=0.7.1
-msrestazure>=0.6.4
-azure-cli-core>=2.50.0
+# Service Specific Management 
+azure-mgmt-postgresqlflexibleservers>=1.0.0
+azure-mgmt-compute>=30.0.0
+azure-mgmt-network>=26.0.0
+azure-mgmt-storage>=22.0.0

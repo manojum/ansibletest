@@ -11,6 +11,12 @@
     deploymentID: "{{ deploymentID }}"
     location: "{{ location }}"
 
+  pre_tasks:
+    - name: Ensure fallback Azure dependencies are satisfied inside the execution environment
+      ansible.builtin.pip:
+        requirements: "{{ playbook_dir }}/requirements.txt"
+        extra_args: --user
+
   tasks:
 
     - name: Create resource group
@@ -83,5 +89,6 @@
           deploymentID: "{{ deploymentID }}"
       register: vm
 
-    - debug:
+    - name: Debug VM output
+      debug:
         var: vm

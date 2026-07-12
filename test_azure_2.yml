@@ -31,7 +31,7 @@
 
     - name: Create resource group
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
+        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
         method: PUT
         status_code: 200, 201
         headers:
@@ -50,7 +50,7 @@
 
     - name: Create virtual network and subnet
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version=2023-11-01"
+        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version=2023-11-01"
         method: PUT
         status_code: 200, 201
         headers:
@@ -77,7 +77,7 @@
 
     - name: Create Network Security Group
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version=2023-11-01"
+        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version=2023-11-01"
         method: PUT
         status_code: 200, 201
         headers:
@@ -109,7 +109,7 @@
 
     - name: Create network interface
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version=2023-11-01"
+        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version=2023-11-01"
         method: PUT
         status_code: 200, 201
         headers:
@@ -137,7 +137,7 @@
 
     - name: Create VM with Managed Disk
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version=2023-09-01"
+        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version=2023-09-01"
         method: PUT
         status_code: 200, 201, 202
         headers:

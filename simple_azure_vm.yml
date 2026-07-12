@@ -17,12 +17,19 @@
         requirements: "{{ playbook_dir }}/requirements.txt"
         extra_args: --user
 
-  tasks:
+  # This forces the modules to bypass the broken CLI fallback lookup
+  environment:
+    AZURE_CLIENT_ID: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
+    AZURE_SECRET: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
+    AZURE_TENANT: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
+    AZURE_SUBSCRIPTION_ID: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
 
+  tasks:
     - name: Create resource group
       azure_rm_resourcegroup:
         name: "{{ resource_group }}"
         location: "{{ location }}"
+        auth_source: credential_file  # Explicitly prevents 'auto' CLI lookup
         tags:
           deploymentID: "{{ deploymentID }}"
 

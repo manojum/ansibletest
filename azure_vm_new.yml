@@ -1,21 +1,41 @@
 ---
-- name: Azure VM provisioning
+- name: Secure Azure VM provisioning via Direct REST API
   hosts: localhost
   connection: local
   gather_facts: no
 
   vars:
-    deploymentID: "{{ deploymentID }}"
-    location: "{{ location }}"
+    # 1. READ SECURE AZURE AUTH DETAILS FROM INJECTED CONTROLLER ENVIRONMENT
     azure_client_id: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
     azure_secret: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
     azure_tenant: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
     azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
 
+    # 2. RUNTIME INFRASTRUCTURE CONFIGURATIONS (Maps to your Survey variables)
+    resource_group: "{{ resource_group | default('rg-cs-ansible') }}"
+    location: "{{ location | default('eastus') }}"
+    network_name: "{{ network_name | default('vnet-cs-ansible') }}"
+    network_cidr: "{{ network_cidr | default('10.0.0.0/16') }}"
+    subnet_name: "{{ subnet_name | default('subnet-cs-ansible') }}"
+    subnet_cidr: "{{ subnet_cidr | default('10.0.1.0/24') }}"
+    security_group: "{{ security_group | default('nsg-cs-ansible') }}"
+    nic_name: "{{ nic_name | default('nic-cs-ansible') }}"
+    vm_name: "{{ vm_name | default('vm-cs-ansible') }}"
+    tcp_ports: "{{ tcp_ports | default('80,443,22') }}"
+    
+    # 3. COMPUTE PROFILES
+    username: "{{ username | default('azureuser') }}"
+    password: "{{ password }}"  # Pulled directly from your template's secure prompt/survey
+    os_type: "{{ os_type | default('Linux') }}"
+    publisher: "{{ publisher | default('Canonical') }}"
+    offer: "{{ offer | default('0001-com-ubuntu-server-jammy') }}"
+    sku: "{{ sku | default('22_04-lts-gen2') }}"
+    deploymentID: "{{ deploymentID | default('azure-linux-deployment') }}"
+
   tasks:
     - name: Obtain Azure REST API Access Token
       ansible.builtin.uri:
-        url: "https://microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
+        url: "https://microsoftonline.com{{ azure_tenant }}/oauth2/v2.0/token"
         method: POST
         body_format: form-urlencoded
         body:
@@ -25,10 +45,11 @@
           client_secret: "{{ azure_secret }}"
         status_code: 200
       register: token_response
+      no_log: true # Prevents the runtime token from printing to the job logs
 
     - name: Create resource group
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
+        url: "https://azure.com{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
         method: PUT
         status_code: [200, 201]
         headers:
@@ -42,7 +63,7 @@
 
     - name: Create virtual network and subnet
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version=2023-11-01"
+        url: "https://azure.com{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version=2023-11-01"
         method: PUT
         status_code: [200, 201]
         headers:
@@ -64,7 +85,7 @@
 
     - name: Create Network Security Group
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version=2023-11-01"
+        url: "https://azure.com{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version=2023-11-01"
         method: PUT
         status_code: [200, 201]
         headers:
@@ -90,7 +111,7 @@
 
     - name: Create network interface
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version=2023-11-01"
+        url: "https://azure.com{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version=2023-11-01"
         method: PUT
         status_code: [200, 201]
         headers:
@@ -113,9 +134,9 @@
 
     - name: Create VM with Managed Disk
       ansible.builtin.uri:
-        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version=2023-09-01"
+        url: "https://azure.com{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version=2023-09-01"
         method: PUT
-        status_code: [200, 201]
+        status_code: [200, 201, 202]
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
           Content-Type: "application/json"

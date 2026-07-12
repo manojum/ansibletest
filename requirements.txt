@@ -1,0 +1,15 @@
+# General Azure Core Dependencies
+azure-core>=1.24.0
+azure-identity>=1.12.0
+
+# Management SDK Packages (Fixes specific module missing issues)
+azure-mgmt-core>=1.3.0
+azure-mgmt-resource>=23.0.0
+azure-mgmt-postgresqlflexibleservers>=1.0.0b1
+azure-mgmt-compute>=30.0.0
+azure-mgmt-network>=25.0.0
+azure-mgmt-storage>=21.0.0
+
+# Helper Libraries for Authentication and Profiles
+msrest>=0.7.1
+msrestazure>=0.6.4

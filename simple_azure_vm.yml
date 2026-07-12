@@ -7,7 +7,6 @@
   vars:
     deploymentID: "{{ deploymentID }}"
     location: "{{ location }}"
-    # Safely pull credentials exposed by your attached Azure Template Credential
     azure_client_id: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
     azure_secret: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
     azure_tenant: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
@@ -16,7 +15,7 @@
   tasks:
     - name: Obtain Azure REST API Access Token
       ansible.builtin.uri:
-        url: "https://microsoftonline.com{{ azure_tenant }}/oauth2/v2.0/token"
+        url: "https://microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
         method: POST
         body_format: form-urlencoded
         body:
@@ -29,9 +28,9 @@
 
     - name: Create resource group via Native REST API
       ansible.builtin.uri:
-        url: "https://azure.com{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
+        url: "https://azure.com/{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
         method: PUT
-        status_code: [200, 201]
+        status_code: 200, 201
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
           Content-Type: "application/json"

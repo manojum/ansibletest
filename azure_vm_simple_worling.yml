@@ -1,0 +1,283 @@
+---
+- name: Azure VM Provisioning using Azure ARM REST APIs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+
+    ###########################################################################
+    # Azure Credential Variables (Provided by AWX Credential)
+    ###########################################################################
+
+    azure_client_id: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
+    azure_secret: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
+    azure_tenant: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
+    azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
+
+    ###########################################################################
+    # API Versions
+    ###########################################################################
+
+    api_rg: "2021-04-01"
+    api_network: "2023-11-01"
+    api_compute: "2023-09-01"
+
+    ###########################################################################
+    # Common URLs
+    ###########################################################################
+
+    arm_endpoint: "https://management.azure.com"
+
+    ###########################################################################
+    # Polling
+    ###########################################################################
+
+    poll_delay: 10
+    poll_retries: 30
+
+    ###########################################################################
+    # Derived Resource IDs
+    ###########################################################################
+
+    rg_id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}"
+
+    vnet_id: "{{ rg_id }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}"
+
+    subnet_id: "{{ vnet_id }}/subnets/{{ subnet_name }}"
+
+    nsg_id: "{{ rg_id }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}"
+
+    pip_id: "{{ rg_id }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}"
+
+    nic_id: "{{ rg_id }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}"
+
+    vm_id: "{{ rg_id }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}"
+
+###########################################################################
+# Tasks
+###########################################################################
+
+  tasks:
+
+###########################################################################
+# Authenticate
+###########################################################################
+
+    - name: Authenticate with Microsoft Entra ID
+      ansible.builtin.uri:
+        url: "https://login.microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          client_id: "{{ azure_client_id }}"
+          client_secret: "{{ azure_secret }}"
+          grant_type: client_credentials
+          scope: "https://management.azure.com/.default"
+        status_code: 200
+      register: token_response
+
+###########################################################################
+# Build ARM Headers
+###########################################################################
+
+    - name: Build ARM Headers
+      ansible.builtin.set_fact:
+
+        arm_headers:
+
+          Authorization: "Bearer {{ token_response.json.access_token }}"
+
+          Content-Type: "application/json"
+
+###########################################################################
+# Display authentication status
+###########################################################################
+
+    - name: Authentication successful
+      ansible.builtin.debug:
+        msg:
+
+          - "Authenticated successfully."
+
+          - "Subscription : {{ azure_subscription_id }}"
+
+          - "Tenant       : {{ azure_tenant }}"
+
+###########################################################################
+# Resource Group
+###########################################################################
+
+    - name: Create Resource Group
+      ansible.builtin.uri:
+
+        url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}?api-version={{ api_rg }}"
+
+        method: PUT
+
+        headers: "{{ arm_headers }}"
+
+        body_format: json
+
+        body:
+
+          location: "{{ location }}"
+
+          tags:
+
+            deploymentID: "{{ deploymentID }}"
+
+        status_code:
+
+          - 200
+          - 201
+
+      register: rg_create
+
+###########################################################################
+# Wait until Resource Group is ready
+###########################################################################
+
+    - name: Wait for Resource Group provisioning
+
+      ansible.builtin.uri:
+
+        url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}?api-version={{ api_rg }}"
+
+        method: GET
+
+        headers: "{{ arm_headers }}"
+
+        status_code: 200
+
+      register: rg_status
+
+      until: >
+
+        rg_status.json.properties.provisioningState | default('Succeeded') == 'Succeeded'
+
+      retries: "{{ poll_retries }}"
+
+      delay: "{{ poll_delay }}"
+
+###########################################################################
+# Report
+###########################################################################
+
+    - name: Resource Group complete
+      ansible.builtin.debug:
+
+        msg:
+
+          - "Resource Group Created"
+
+          - "{{ rg_status.json.properties.provisioningState }}"
+
+###########################################################################
+# Virtual Network
+###########################################################################
+
+    - name: Create Virtual Network
+
+      ansible.builtin.uri:
+
+        url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version={{ api_network }}"
+
+        method: PUT
+
+        headers: "{{ arm_headers }}"
+
+        body_format: json
+
+        body:
+
+          location: "{{ location }}"
+
+          tags:
+
+            deploymentID: "{{ deploymentID }}"
+
+          properties:
+
+            addressSpace:
+
+              addressPrefixes:
+
+                - "{{ network_cidr }}"
+
+            subnets:
+
+              - name: "{{ subnet_name }}"
+
+                properties:
+
+                  addressPrefix: "{{ subnet_cidr }}"
+
+        status_code:
+
+          - 200
+          - 201
+
+      register: vnet_create
+
+###########################################################################
+# Wait for Virtual Network
+###########################################################################
+
+    - name: Wait for Virtual Network provisioning
+
+      ansible.builtin.uri:
+
+        url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version={{ api_network }}"
+
+        method: GET
+
+        headers: "{{ arm_headers }}"
+
+        status_code: 200
+
+      register: vnet_status
+
+      until: >
+
+        vnet_status.json.properties.provisioningState == 'Succeeded'
+
+      retries: "{{ poll_retries }}"
+
+      delay: "{{ poll_delay }}"
+
+###########################################################################
+# Validate subnet
+###########################################################################
+
+    - name: Verify subnet exists
+
+      ansible.builtin.uri:
+
+        url: "{{ arm_endpoint }}{{ subnet_id }}?api-version={{ api_network }}"
+
+        method: GET
+
+        headers: "{{ arm_headers }}"
+
+        status_code: 200
+
+      register: subnet_status
+
+###########################################################################
+# Report
+###########################################################################
+
+    - name: Report Networking
+
+      ansible.builtin.debug:
+
+        msg:
+
+          - "Virtual Network created"
+
+          - "Provisioning State : {{ vnet_status.json.properties.provisioningState }}"
+
+          - "Subnet             : {{ subnet_status.json.name }}"
+
+          - "Address Prefix      : {{ subnet_status.json.properties.addressPrefix }}"

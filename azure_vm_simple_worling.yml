@@ -179,7 +179,7 @@
 # Part 4A - Network Security Group
 ###############################################################################
 
-- name: Create Network Security Group
+  - name: Create Network Security Group
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
     method: PUT
@@ -210,7 +210,7 @@
 # Wait for NSG Provisioning
 ###############################################################################
 
-- name: Wait for Network Security Group
+  - name: Wait for Network Security Group
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
     method: GET
@@ -225,7 +225,7 @@
 # Report NSG
 ###############################################################################
 
-- name: Report NSG Status
+  - name: Report NSG Status
   ansible.builtin.debug:
     msg:
       - "Network Security Group created."
@@ -235,7 +235,7 @@
 # Part 4B - Public IP
 ###############################################################################
 
-- name: Create Public IP Address
+  - name: Create Public IP Address
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}?api-version={{ api_network }}"
     method: PUT
@@ -259,7 +259,7 @@
 # Wait for Public IP
 ###############################################################################
 
-- name: Wait for Public IP Provisioning
+  - name: Wait for Public IP Provisioning
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}?api-version={{ api_network }}"
     method: GET
@@ -274,7 +274,7 @@
 # Report Public IP
 ###############################################################################
 
-- name: Report Public IP
+  - name: Report Public IP
   ansible.builtin.debug:
     msg:
       - "Public IP resource created."
@@ -284,7 +284,7 @@
 # Part 4C - Network Interface
 ###############################################################################
 
-- name: Create Network Interface
+  - name: Create Network Interface
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version={{ api_network }}"
     method: PUT
@@ -314,7 +314,7 @@
 # Wait for NIC
 ###############################################################################
 
-- name: Wait for Network Interface Provisioning
+  - name: Wait for Network Interface Provisioning
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version={{ api_network }}"
     method: GET
@@ -329,7 +329,7 @@
 # Validate NIC
 ###############################################################################
 
-- name: Validate Network Interface
+  - name: Validate Network Interface
   ansible.builtin.debug:
     msg:
       - "Network Interface created."
@@ -340,7 +340,7 @@
 # Part 7A - Create Virtual Machine
 ###############################################################################
 
-- name: Create Virtual Machine
+  - name: Create Virtual Machine
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version={{ api_compute }}"
     method: PUT
@@ -391,7 +391,7 @@
 # Determine Async Poll URL
 ###############################################################################
 
-- name: Determine Azure Async URL
+  - name: Determine Azure Async URL
   ansible.builtin.set_fact:
     azure_async_url: >-
       {{
@@ -404,7 +404,7 @@
 # Show ARM Response
 ###############################################################################
 
-- name: Display ARM Response
+  - name: Display ARM Response
   ansible.builtin.debug:
     msg:
       - "HTTP Status : {{ vm_create.status }}"
@@ -414,7 +414,7 @@
 # Part 7B - Poll Azure Long Running Operation
 ###############################################################################
 
-- name: Poll Azure Async Operation
+  - name: Poll Azure Async Operation
   when: azure_async_url | length > 0
   ansible.builtin.uri:
     url: "{{ azure_async_url }}"
@@ -435,7 +435,7 @@
 # Display Async Status
 ###############################################################################
 
-- name: Display Azure Async Status
+  - name: Display Azure Async Status
   when:
     - azure_async_url | length > 0
     - vm_async_status.json.status is defined
@@ -447,7 +447,7 @@
 # Fail if Azure reports failure
 ###############################################################################
 
-- name: Fail when Azure reports provisioning failure
+  - name: Fail when Azure reports provisioning failure
   when:
     - azure_async_url | length > 0
     - vm_async_status.json.status == "Failed"
@@ -461,7 +461,7 @@
 # No Async URL returned
 ###############################################################################
 
-- name: Azure did not return Azure-AsyncOperation header
+  - name: Azure did not return Azure-AsyncOperation header
   when: azure_async_url | length == 0
   ansible.builtin.debug:
     msg:
@@ -472,7 +472,7 @@
 # Poll VM provisioningState
 ###############################################################################
 
-- name: Wait for VM Provisioning
+  - name: Wait for VM Provisioning
   when: azure_async_url | length == 0
   ansible.builtin.uri:
     url: "{{ vm_id }}?api-version={{ api_compute }}"
@@ -492,7 +492,7 @@
 # Display Provisioning State
 ###############################################################################
 
-- name: Display VM Provisioning State
+  - name: Display VM Provisioning State
   when: azure_async_url | length == 0
   ansible.builtin.debug:
     msg:
@@ -502,7 +502,7 @@
 # Part 8 - Retrieve VM Information
 ###############################################################################
 
-- name: Get Virtual Machine Details
+  - name: Get Virtual Machine Details
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version={{ api_compute }}"
     method: GET
@@ -514,7 +514,7 @@
 # Extract NIC Resource ID
 ###############################################################################
 
-- name: Save Network Interface ID
+  - name: Save Network Interface ID
   ansible.builtin.set_fact:
     vm_nic_id: "{{ vm_info.json.properties.networkProfile.networkInterfaces[0].id }}"
 
@@ -522,7 +522,7 @@
 # Retrieve NIC
 ###############################################################################
 
-- name: Get Network Interface Details
+  - name: Get Network Interface Details
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}{{ vm_nic_id }}?api-version={{ api_network }}"
     method: GET
@@ -534,7 +534,7 @@
 # Extract Private IP
 ###############################################################################
 
-- name: Save Private IP Address
+  - name: Save Private IP Address
   ansible.builtin.set_fact:
     private_ip: "{{ nic_info.json.properties.ipConfigurations[0].properties.privateIPAddress }}"
 
@@ -542,7 +542,7 @@
 # Extract Public IP Resource ID
 ###############################################################################
 
-- name: Save Public IP Resource ID
+  - name: Save Public IP Resource ID
   ansible.builtin.set_fact:
     public_ip_resource_id: >-
       {{
@@ -554,7 +554,7 @@
 # Retrieve Public IP
 ###############################################################################
 
-- name: Get Public IP Details
+  - name: Get Public IP Details
   when: public_ip_resource_id | length > 0
   ansible.builtin.uri:
     url: "{{ arm_endpoint }}{{ public_ip_resource_id }}?api-version={{ api_network }}"
@@ -567,7 +567,7 @@
 # Save Public IP Address
 ###############################################################################
 
-- name: Save Public IP Address
+  - name: Save Public IP Address
   when: public_ip_resource_id | length > 0
   ansible.builtin.set_fact:
     public_ip: "{{ public_ip_info.json.properties.ipAddress | default('Pending') }}"
@@ -576,7 +576,7 @@
 # VM Provisioning Summary
 ###############################################################################
 
-- name: Display VM Information
+  - name: Display VM Information
   ansible.builtin.debug:
     msg:
       - "----------------------------------------------------"

@@ -16,14 +16,14 @@
     azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
 
   pre_tasks:
-    - name: Dynamically fix broken collection ADAL imports inside container
-      ansible.builtin.shell: |
-        PYTHON_SITE=$(python3 -c "import site; print(site.getsitepackages()[0])")
-        mkdir -p "$PYTHON_SITE/azure/cli/core/auth"
-        touch "$PYTHON_SITE/azure/cli/core/__init__.py"
-        touch "$PYTHON_SITE/azure/cli/core/auth/__init__.py"
-        echo "class MSIAuthenticationWrapper: pass" > "$PYTHON_SITE/azure/cli/core/auth/adal_authentication.py"
-      changed_when: false
+    - name: Force install legacy and missing cloud modules globally inside the container
+      ansible.builtin.pip:
+        name:
+          - "azure-mgmt-datalake-store"
+          - "azure-mgmt-postgresqlflexibleservers"
+          - "azure-cli-core==2.34.0" # Keeps old ADAL wrapper intact for initialization
+        extra_args: "--break-system-packages"
+      ignore_errors: true
 
   tasks:
     - name: Create resource group

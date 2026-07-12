@@ -35,7 +35,7 @@
   tasks:
     - name: Obtain Azure REST API Access Token
       ansible.builtin.uri:
-        url: "https://microsoftonline.com{{ azure_tenant }}/oauth2/v2.0/token"
+        url: "https://login.microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
         method: POST
         body_format: form-urlencoded
         body:
@@ -45,7 +45,12 @@
           client_secret: "{{ azure_secret }}"
         status_code: 200
       register: token_response
-      no_log: true 
+      ignore_errors: true
+
+    - name: Fail with Clean Azure Error Message if Token Request Fails
+      ansible.builtin.fail:
+        msg: "Azure Login Failed! Status: {{ token_response.status }}. Error Description: {{ token_response.json.error_description | default(token_response.msg) }}"
+      when: token_response.status != 200
 
     - name: Report Token Authentication Status
       ansible.builtin.debug:
@@ -55,7 +60,7 @@
       ansible.builtin.uri:
         url: "https://azure.com{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
         method: PUT
-        status_code: [200, 201]
+        status_code: 200, 201
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
           Content-Type: "application/json"
@@ -74,7 +79,7 @@
       ansible.builtin.uri:
         url: "https://azure.com{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version=2023-11-01"
         method: PUT
-        status_code: [200, 201]
+        status_code: 200, 201
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
           Content-Type: "application/json"
@@ -101,7 +106,7 @@
       ansible.builtin.uri:
         url: "https://azure.com{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version=2023-11-01"
         method: PUT
-        status_code: [200, 201]
+        status_code: 200, 201
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
           Content-Type: "application/json"
@@ -132,7 +137,7 @@
       ansible.builtin.uri:
         url: "https://azure.com{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version=2023-11-01"
         method: PUT
-        status_code: [200, 201]
+        status_code: 200, 201
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
           Content-Type: "application/json"
@@ -160,7 +165,7 @@
       ansible.builtin.uri:
         url: "https://azure.com{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version=2023-09-01"
         method: PUT
-        status_code: [200, 201, 202]
+        status_code: 200, 201, 202
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
           Content-Type: "application/json"

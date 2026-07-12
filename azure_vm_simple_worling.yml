@@ -179,81 +179,81 @@
   # Part 4A - Network Security Group
   ###############################################################################
 
-  - name: Create Network Security Group
-    ansible.builtin.uri:
-      url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
-      method: PUT
-      headers: "{{ arm_headers }}"
-      body_format: json
-      body:
-        location: "{{ location }}"
-      tags:
-        deploymentID: "{{ deploymentID }}"
-      properties:
-        securityRules:
-          - name: Allow-TCP
-            properties:
-              protocol: Tcp
-              sourcePortRange: "*"
-              destinationPortRanges: "{{ tcp_ports | map('string') | list }}"
-              sourceAddressPrefix: "*"
-              destinationAddressPrefix: "*"
-              access: Allow
-              priority: 1000
-              direction: Inbound
+    - name: Create Network Security Group
+      ansible.builtin.uri:
+        url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
+        method: PUT
+        headers: "{{ arm_headers }}"
+        body_format: json
+        body:
+          location: "{{ location }}"
+        tags:
+          deploymentID: "{{ deploymentID }}"
+        properties:
+          securityRules:
+            - name: Allow-TCP
+              properties:
+                protocol: Tcp
+                sourcePortRange: "*"
+                destinationPortRanges: "{{ tcp_ports | map('string') | list }}"
+                sourceAddressPrefix: "*"
+                destinationAddressPrefix: "*"
+                access: Allow
+                priority: 1000
+                direction: Inbound
       status_code:
         - 200
         - 201
-    register: nsg_create
+      register: nsg_create
 
   ###############################################################################
   # Wait for NSG Provisioning
   ###############################################################################
 
-  - name: Wait for Network Security Group
-    ansible.builtin.uri:
-      url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
-      method: GET
-      headers: "{{ arm_headers }}"
-      status_code: 200
-  register: nsg_status
-  until: nsg_status.json.properties.provisioningState == "Succeeded"
-  retries: "{{ poll_retries }}"
-  delay: "{{ poll_delay }}"
+    - name: Wait for Network Security Group
+      ansible.builtin.uri:
+        url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
+        method: GET
+        headers: "{{ arm_headers }}"
+        status_code: 200
+      register: nsg_status
+      until: nsg_status.json.properties.provisioningState == "Succeeded"
+      retries: "{{ poll_retries }}"
+      delay: "{{ poll_delay }}"
 
   ###############################################################################
   # Report NSG
   ###############################################################################
 
-  - name: Report NSG Status
-  ansible.builtin.debug:
-    msg:
-      - "Network Security Group created."
-      - "Provisioning State: {{ nsg_status.json.properties.provisioningState }}"
+    - name: Report NSG Status
+      ansible.builtin.debug:
+        msg:
+          - "Network Security Group created."
+          - "Provisioning State: {{ nsg_status.json.properties.provisioningState }}"
 
   ###############################################################################
   # Part 4B - Public IP
   ###############################################################################
 
-  - name: Create Public IP Address
-  ansible.builtin.uri:
-    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}?api-version={{ api_network }}"
-    method: PUT
-    headers: "{{ arm_headers }}"
-    body_format: json
-    body:
-      location: "{{ location }}"
-      sku:
-        name: Standard
-      tags:
-        deploymentID: "{{ deploymentID }}"
-      properties:
-        publicIPAllocationMethod: Static
-        publicIPAddressVersion: IPv4
-    status_code:
-      - 200
-      - 201
-  register: pip_create
+    - name: Create Public IP Address
+      ansible.builtin.uri:
+        url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}?api-version={{ api_network }}"
+        method: PUT
+        headers: "{{ arm_headers }}"
+        body_format: json
+        body:
+          location: "{{ location }}"
+        sku:
+          name: Standard
+        tags:
+          deploymentID: "{{ deploymentID }}"
+        properties:
+          publicIPAllocationMethod: Static
+          publicIPAddressVersion: IPv4
+      status_code:
+        - 200
+        - 201
+      register: pip_create
 
   ###############################################################################
   # Wait for Public IP

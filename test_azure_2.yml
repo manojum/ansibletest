@@ -2,16 +2,17 @@
 - name: Secure Azure VM provisioning via Direct REST API
   hosts: localhost
   connection: local
-  gather_facts: no
+  gather_facts: false
 
   vars:
-    # Secure lookups from the template's attached Azure Credential
     azure_client_id: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
     azure_secret: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
     azure_tenant: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
     azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
+    public_ip_name: "pip-{{ vm_name }}"
 
   tasks:
+
     - name: Obtain Azure REST API Access Token
       ansible.builtin.uri:
         url: "https://login.microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
@@ -19,43 +20,37 @@
         body_format: form-urlencoded
         body:
           client_id: "{{ azure_client_id }}"
+          client_secret: "{{ azure_secret }}"
           grant_type: client_credentials
           scope: "https://management.azure.com/.default"
-          client_secret: "{{ azure_secret }}"
         status_code: 200
       register: token_response
 
-    - name: Report Token Authentication Status
-      ansible.builtin.debug:
-        msg: "Step 1/6: OAuth Authentication successful. Token obtained from Microsoft Identity Platform."
+    - debug:
+        msg: "Authenticated to Azure."
 
-    - name: Create resource group
+    - name: Create Resource Group
       ansible.builtin.uri:
-        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
+        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}?api-version=2021-04-01"
         method: PUT
-        status_code: 200, 201
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
-          Content-Type: "application/json"
+          Content-Type: application/json
         body_format: json
         body:
           location: "{{ location }}"
           tags:
             deploymentID: "{{ deploymentID }}"
+        status_code: [200,201]
       register: rg_output
 
-    - name: Report Resource Group Deployment Status
-      ansible.builtin.debug:
-        msg: "Step 2/6: Resource Group Deployment responded with HTTP Status: {{ rg_output.status }}"
-
-    - name: Create virtual network and subnet
+    - name: Create VNet
       ansible.builtin.uri:
         url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version=2023-11-01"
         method: PUT
-        status_code: 200, 201
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
-          Content-Type: "application/json"
+          Content-Type: application/json
         body_format: json
         body:
           location: "{{ location }}"
@@ -69,20 +64,16 @@
               - name: "{{ subnet_name }}"
                 properties:
                   addressPrefix: "{{ subnet_cidr }}"
+        status_code: [200,201]
       register: vnet_output
 
-    - name: Report Virtual Network Deployment Status
-      ansible.builtin.debug:
-        msg: "Step 3/6: Virtual Network & Subnet Deployment responded with HTTP Status: {{ vnet_output.status }}"
-
-    - name: Create Network Security Group
+    - name: Create NSG
       ansible.builtin.uri:
         url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version=2023-11-01"
         method: PUT
-        status_code: 200, 201
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
-          Content-Type: "application/json"
+          Content-Type: application/json
         body_format: json
         body:
           location: "{{ location }}"
@@ -93,56 +84,64 @@
               - name: allow_web_traffic
                 properties:
                   protocol: Tcp
-                  # Maps your multi-port extra variable list securely into the API array field
+                  sourcePortRange: "*"
                   destinationPortRanges: "{{ tcp_ports | map('string') | list }}"
+                  sourceAddressPrefix: "*"
+                  destinationAddressPrefix: "*"
                   access: Allow
                   priority: 1002
                   direction: Inbound
-                  sourceAddressPrefix: '*'
-                  sourcePortRange: '*'
-                  destinationAddressPrefix: '*'
+        status_code: [200,201]
       register: nsg_output
 
-    - name: Report Network Security Group Deployment Status
-      ansible.builtin.debug:
-        msg: "Step 4/6: Network Security Group Deployment responded with HTTP Status: {{ nsg_output.status }}"
-
-    - name: Create network interface
+    - name: Create Public IP
       ansible.builtin.uri:
-        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version=2023-11-01"
+        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}?api-version=2023-11-01"
         method: PUT
-        status_code: 200, 201
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
-          Content-Type: "application/json"
+          Content-Type: application/json
         body_format: json
         body:
           location: "{{ location }}"
-          tags:
-            deploymentID: "{{ deploymentID }}"
+          sku:
+            name: Standard
           properties:
+            publicIPAllocationMethod: Static
+        status_code: [200,201]
+      register: pip_output
+
+    - name: Create NIC
+      ansible.builtin.uri:
+        url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version=2023-11-01"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{ token_response.json.access_token }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          location: "{{ location }}"
+          properties:
+            networkSecurityGroup:
+              id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}"
             ipConfigurations:
-              - name: default
+              - name: ipconfig1
                 properties:
                   privateIPAllocationMethod: Dynamic
                   subnet:
                     id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}/subnets/{{ subnet_name }}"
-                  networkSecurityGroup:
-                    id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}"
+                  publicIPAddress:
+                    id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}"
+        status_code: [200,201]
       register: nic_output
 
-    - name: Report Network Interface Deployment Status
-      ansible.builtin.debug:
-        msg: "Step 5/6: Network Interface Deployment responded with HTTP Status: {{ nic_output.status }}"
-
-    - name: Create VM with Managed Disk
+    - name: Create VM
       ansible.builtin.uri:
         url: "https://management.azure.com/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version=2023-09-01"
         method: PUT
-        status_code: 200, 201, 202
         headers:
           Authorization: "Bearer {{ token_response.json.access_token }}"
-          Content-Type: "application/json"
+          Content-Type: application/json
         body_format: json
         body:
           location: "{{ location }}"
@@ -158,7 +157,6 @@
                 sku: "{{ sku }}"
                 version: latest
               osDisk:
-                name: "{{ vm_name }}_os_disk"
                 createOption: FromImage
                 managedDisk:
                   storageAccountType: Standard_LRS
@@ -166,11 +164,15 @@
               computerName: "{{ vm_name }}"
               adminUsername: "{{ username }}"
               adminPassword: "{{ password }}"
+              linuxConfiguration:
+                disablePasswordAuthentication: false
             networkProfile:
               networkInterfaces:
                 - id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}"
+                  properties:
+                    primary: true
+        status_code: [200,201,202]
       register: vm_output
 
-    - name: Report Virtual Machine Deployment Status
-      ansible.builtin.debug:
-        msg: "Step 6/6: Virtual Machine Deployment request completed with HTTP Status: {{ vm_output.status }} (ProvisioningState: {{ vm_output.json.properties.provisioningState | default('Accepted/Creating') }})"
+    - debug:
+        var: vm_output.status

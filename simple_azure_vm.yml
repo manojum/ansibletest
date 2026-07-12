@@ -4,9 +4,6 @@
   connection: local
   gather_facts: no
 
-  collections:
-    - azure.azcollection
-
   vars:
     deploymentID: "{{ deploymentID }}"
     location: "{{ location }}"
@@ -15,124 +12,136 @@
     azure_tenant: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
     azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
 
-  pre_tasks:
-    - name: Force install legacy and missing cloud modules
-      ansible.builtin.pip:
-        name:
-          - "azure-mgmt-datalake-store"
-          - "azure-mgmt-postgresqlflexibleservers"
-          - "azure-cli-core==2.34.0"
-        extra_args: "--break-system-packages"
-      ignore_errors: true
-
-    - name: Monkeypatch inspect.getargspec for Python 3.11 compatibility
-      ansible.builtin.shell: |
-        PYTHON_SITE=$(python3 -c "import site; print(site.getsitepackages()[0])")
-        mkdir -p "$PYTHON_SITE"
-        echo -e "import inspect\nif not hasattr(inspect, 'getargspec'):\n    inspect.getargspec = inspect.getfullargspec" > "$PYTHON_SITE/sitecustomize.py"
-      changed_when: false
-
   tasks:
+    - name: Obtain Azure REST API Access Token
+      ansible.builtin.uri:
+        url: "https://microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          client_id: "{{ azure_client_id }}"
+          grant_type: client_credentials
+          scope: "https://azure.com"
+          client_secret: "{{ azure_secret }}"
+        status_code: 200
+      register: token_response
+
     - name: Create resource group
-      azure_rm_resourcegroup:
-        client_id: "{{ azure_client_id }}"
-        secret: "{{ azure_secret }}"
-        tenant: "{{ azure_tenant }}"
-        subscription_id: "{{ azure_subscription_id }}"
-        auth_source: env
-        name: "{{ resource_group }}"
-        location: "{{ location }}"
-        tags:
-          deploymentID: "{{ deploymentID }}"
+      ansible.builtin.uri:
+        url: "https://azure.com/{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
+        method: PUT
+        status_code: [200, 201]
+        headers:
+          Authorization: "Bearer {{ token_response.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          location: "{{ location }}"
+          tags:
+            deploymentID: "{{ deploymentID }}"
 
-    - name: Create virtual network
-      azure_rm_virtualnetwork:
-        client_id: "{{ azure_client_id }}"
-        secret: "{{ azure_secret }}"
-        tenant: "{{ azure_tenant }}"
-        subscription_id: "{{ azure_subscription_id }}"
-        auth_source: env
-        resource_group: "{{ resource_group }}"
-        name: "{{ network_name }}"
-        address_prefixes:
-          - "{{ network_cidr }}"
-        tags:
-          deploymentID: "{{ deploymentID }}"
-
-    - name: Add subnet
-      azure_rm_subnet:
-        client_id: "{{ azure_client_id }}"
-        secret: "{{ azure_secret }}"
-        tenant: "{{ azure_tenant }}"
-        subscription_id: "{{ azure_subscription_id }}"
-        auth_source: env
-        resource_group: "{{ resource_group }}"
-        name: "{{ subnet_name }}"
-        address_prefix: "{{ subnet_cidr }}"
-        virtual_network: "{{ network_name }}"
+    - name: Create virtual network and subnet
+      ansible.builtin.uri:
+        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version=2023-11-01"
+        method: PUT
+        status_code: [200, 201]
+        headers:
+          Authorization: "Bearer {{ token_response.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          location: "{{ location }}"
+          tags:
+            deploymentID: "{{ deploymentID }}"
+          properties:
+            addressSpace:
+              addressPrefixes:
+                - "{{ network_cidr }}"
+            subnets:
+              - name: "{{ subnet_name }}"
+                properties:
+                  addressPrefix: "{{ subnet_cidr }}"
 
     - name: Create Network Security Group
-      azure_rm_securitygroup:
-        client_id: "{{ azure_client_id }}"
-        secret: "{{ azure_secret }}"
-        tenant: "{{ azure_tenant }}"
-        subscription_id: "{{ azure_subscription_id }}"
-        auth_source: env
-        resource_group: "{{ resource_group }}"
-        name: "{{ security_group }}"
-        rules:
-          - name: allow_web_traffic
-            protocol: Tcp
-            destination_port_range: "{{ tcp_ports }}"
-            access: Allow
-            priority: 1002
-            direction: Inbound
-        tags:
-          deploymentID: "{{ deploymentID }}"
+      ansible.builtin.uri:
+        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version=2023-11-01"
+        method: PUT
+        status_code: [200, 201]
+        headers:
+          Authorization: "Bearer {{ token_response.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          location: "{{ location }}"
+          tags:
+            deploymentID: "{{ deploymentID }}"
+          properties:
+            securityRules:
+              - name: allow_web_traffic
+                properties:
+                  protocol: Tcp
+                  destinationPortRange: "{{ tcp_ports }}"
+                  access: Allow
+                  priority: 1002
+                  direction: Inbound
+                  sourceAddressPrefix: '*'
+                  sourcePortRange: '*'
+                  destinationAddressPrefix: '*'
 
     - name: Create network interface
-      azure_rm_networkinterface:
-        client_id: "{{ azure_client_id }}"
-        secret: "{{ azure_secret }}"
-        tenant: "{{ azure_tenant }}"
-        subscription_id: "{{ azure_subscription_id }}"
-        auth_source: env
-        name: "{{ nic_name }}"
-        resource_group: "{{ resource_group }}"
-        virtual_network: "{{ network_name }}"
-        subnet_name: "{{ subnet_name }}"
-        security_group: "{{ security_group }}"
-        ip_configurations:
-          - name: default
-            primary: true
-        tags:
-          deploymentID: "{{ deploymentID }}"
+      ansible.builtin.uri:
+        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version=2023-11-01"
+        method: PUT
+        status_code: [200, 201]
+        headers:
+          Authorization: "Bearer {{ token_response.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          location: "{{ location }}"
+          tags:
+            deploymentID: "{{ deploymentID }}"
+          properties:
+            ipConfigurations:
+              - name: default
+                properties:
+                  privateIPAllocationMethod: Dynamic
+                  subnet:
+                    id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}/subnets/{{ subnet_name }}"
+                  networkSecurityGroup:
+                    id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}"
 
     - name: Create VM with Managed Disk
-      azure_rm_virtualmachine:
-        client_id: "{{ azure_client_id }}"
-        secret: "{{ azure_secret }}"
-        tenant: "{{ azure_tenant }}"
-        subscription_id: "{{ azure_subscription_id }}"
-        auth_source: env
-        resource_group: "{{ resource_group }}"
-        name: "{{ vm_name }}"
-        vm_size: Standard_DS1_v2
-        admin_username: "{{ username }}"
-        admin_password: "{{ password }}"
-        network_interface_names:
-          - "{{ nic_name }}"
-        os_type: "{{ os_type }}"
-        image:
-          offer: "{{ offer }}"
-          publisher: "{{ publisher }}"
-          sku: "{{ sku }}"
-          version: latest
-        managed_disk_type: Standard_LRS
-        tags:
-          deploymentID: "{{ deploymentID }}"
-      register: vm
-
-    - name: Debug VM output
-      debug:
-        var: vm
+      ansible.builtin.uri:
+        url: "https://azure.com/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version=2023-09-01"
+        method: PUT
+        status_code: [200, 201]
+        headers:
+          Authorization: "Bearer {{ token_response.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          location: "{{ location }}"
+          tags:
+            deploymentID: "{{ deploymentID }}"
+          properties:
+            hardwareProfile:
+              vmSize: Standard_DS1_v2
+            storageProfile:
+              imageReference:
+                publisher: "{{ publisher }}"
+                offer: "{{ offer }}"
+                sku: "{{ sku }}"
+                version: latest
+              osDisk:
+                name: "{{ vm_name }}_os_disk"
+                createOption: FromImage
+                managedDisk:
+                  storageAccountType: Standard_LRS
+            osProfile:
+              computerName: "{{ vm_name }}"
+              adminUsername: "{{ username }}"
+              adminPassword: "{{ password }}"
+            networkProfile:
+              networkInterfaces:
+                - id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}"

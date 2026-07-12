@@ -180,13 +180,13 @@
   ###############################################################################
 
   - name: Create Network Security Group
-  ansible.builtin.uri:
-    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
-    method: PUT
-    headers: "{{ arm_headers }}"
-    body_format: json
-    body:
-      location: "{{ location }}"
+    ansible.builtin.uri:
+      url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
+      method: PUT
+      headers: "{{ arm_headers }}"
+      body_format: json
+      body:
+        location: "{{ location }}"
       tags:
         deploymentID: "{{ deploymentID }}"
       properties:
@@ -201,21 +201,21 @@
               access: Allow
               priority: 1000
               direction: Inbound
-    status_code:
-      - 200
-      - 201
-  register: nsg_create
+      status_code:
+        - 200
+        - 201
+    register: nsg_create
 
   ###############################################################################
   # Wait for NSG Provisioning
   ###############################################################################
 
   - name: Wait for Network Security Group
-  ansible.builtin.uri:
-    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
-    method: GET
-    headers: "{{ arm_headers }}"
-    status_code: 200
+    ansible.builtin.uri:
+      url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
+      method: GET
+      headers: "{{ arm_headers }}"
+      status_code: 200
   register: nsg_status
   until: nsg_status.json.properties.provisioningState == "Succeeded"
   retries: "{{ poll_retries }}"

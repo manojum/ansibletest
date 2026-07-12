@@ -13,9 +13,9 @@
     azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
 
   tasks:
-    - name: Obtain Azure REST API Access Token
+        - name: Obtain Azure REST API Access Token
       ansible.builtin.uri:
-        url: "https://microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
+        url: "https://login.microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
         method: POST
         body_format: form-urlencoded
         body:
@@ -25,6 +25,7 @@
           client_secret: "{{ azure_secret }}"
         status_code: 200
       register: token_response
+
 
     - name: Create resource group via Native REST API
       ansible.builtin.uri:

@@ -5,65 +5,45 @@
   gather_facts: false
 
   vars:
-
     ###########################################################################
     # Azure Credential Variables (Provided by AWX Credential)
     ###########################################################################
-
     azure_client_id: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
     azure_secret: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
     azure_tenant: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
     azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
-
     ###########################################################################
     # API Versions
     ###########################################################################
-
     api_rg: "2021-04-01"
     api_network: "2023-11-01"
     api_compute: "2023-09-01"
-
     ###########################################################################
     # Common URLs
     ###########################################################################
-
     arm_endpoint: "https://management.azure.com"
-
     ###########################################################################
     # Polling
     ###########################################################################
-
     poll_delay: 10
     poll_retries: 30
-
     ###########################################################################
     # Derived Resource IDs
     ###########################################################################
-
     rg_id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}"
-
     vnet_id: "{{ rg_id }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}"
-
     subnet_id: "{{ vnet_id }}/subnets/{{ subnet_name }}"
-
     nsg_id: "{{ rg_id }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}"
-
     pip_id: "{{ rg_id }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}"
-
     nic_id: "{{ rg_id }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}"
-
     vm_id: "{{ rg_id }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}"
-
 ###########################################################################
 # Tasks
 ###########################################################################
-
   tasks:
-
 ###########################################################################
 # Authenticate
 ###########################################################################
-
     - name: Authenticate with Microsoft Entra ID
       ansible.builtin.uri:
         url: "https://login.microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
@@ -76,192 +56,111 @@
           scope: "https://management.azure.com/.default"
         status_code: 200
       register: token_response
-
 ###########################################################################
 # Build ARM Headers
 ###########################################################################
-
     - name: Build ARM Headers
       ansible.builtin.set_fact:
-
         arm_headers:
-
           Authorization: "Bearer {{ token_response.json.access_token }}"
-
           Content-Type: "application/json"
-
 ###########################################################################
 # Display authentication status
 ###########################################################################
-
     - name: Authentication successful
       ansible.builtin.debug:
         msg:
-
           - "Authenticated successfully."
-
           - "Subscription : {{ azure_subscription_id }}"
-
           - "Tenant       : {{ azure_tenant }}"
-
 ###########################################################################
 # Resource Group
 ###########################################################################
-
     - name: Create Resource Group
       ansible.builtin.uri:
-
         url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}?api-version={{ api_rg }}"
-
         method: PUT
-
         headers: "{{ arm_headers }}"
-
         body_format: json
-
         body:
-
           location: "{{ location }}"
-
           tags:
-
             deploymentID: "{{ deploymentID }}"
-
         status_code:
-
           - 200
           - 201
-
       register: rg_create
-
 ###########################################################################
 # Wait until Resource Group is ready
 ###########################################################################
-
     - name: Wait for Resource Group provisioning
-
       ansible.builtin.uri:
-
         url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}?api-version={{ api_rg }}"
-
         method: GET
-
         headers: "{{ arm_headers }}"
-
         status_code: 200
-
       register: rg_status
-
       until: >
-
         rg_status.json.properties.provisioningState | default('Succeeded') == 'Succeeded'
-
       retries: "{{ poll_retries }}"
-
       delay: "{{ poll_delay }}"
-
 ###########################################################################
 # Report
 ###########################################################################
-
     - name: Resource Group complete
       ansible.builtin.debug:
-
         msg:
-
           - "Resource Group Created"
-
           - "{{ rg_status.json.properties.provisioningState }}"
-
 ###########################################################################
 # Virtual Network
 ###########################################################################
-
     - name: Create Virtual Network
-
       ansible.builtin.uri:
-
         url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version={{ api_network }}"
-
         method: PUT
-
         headers: "{{ arm_headers }}"
-
         body_format: json
-
         body:
-
           location: "{{ location }}"
-
           tags:
-
             deploymentID: "{{ deploymentID }}"
-
           properties:
-
             addressSpace:
-
               addressPrefixes:
-
                 - "{{ network_cidr }}"
-
             subnets:
-
               - name: "{{ subnet_name }}"
-
                 properties:
-
                   addressPrefix: "{{ subnet_cidr }}"
-
         status_code:
-
           - 200
           - 201
-
       register: vnet_create
-
 ###########################################################################
 # Wait for Virtual Network
 ###########################################################################
-
     - name: Wait for Virtual Network provisioning
-
       ansible.builtin.uri:
-
         url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}?api-version={{ api_network }}"
-
         method: GET
-
         headers: "{{ arm_headers }}"
-
         status_code: 200
-
       register: vnet_status
-
       until: >
-
         vnet_status.json.properties.provisioningState == 'Succeeded'
-
       retries: "{{ poll_retries }}"
-
       delay: "{{ poll_delay }}"
-
 ###########################################################################
 # Validate subnet
 ###########################################################################
 
     - name: Verify subnet exists
-
       ansible.builtin.uri:
-
         url: "{{ arm_endpoint }}{{ subnet_id }}?api-version={{ api_network }}"
-
         method: GET
-
         headers: "{{ arm_headers }}"
-
         status_code: 200
-
       register: subnet_status
 
 ###########################################################################
@@ -269,15 +168,425 @@
 ###########################################################################
 
     - name: Report Networking
-
       ansible.builtin.debug:
-
         msg:
-
           - "Virtual Network created"
-
           - "Provisioning State : {{ vnet_status.json.properties.provisioningState }}"
-
           - "Subnet             : {{ subnet_status.json.name }}"
-
           - "Address Prefix      : {{ subnet_status.json.properties.addressPrefix }}"
+
+###############################################################################
+# Part 4A - Network Security Group
+###############################################################################
+
+- name: Create Network Security Group
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
+    method: PUT
+    headers: "{{ arm_headers }}"
+    body_format: json
+    body:
+      location: "{{ location }}"
+      tags:
+        deploymentID: "{{ deploymentID }}"
+      properties:
+        securityRules:
+          - name: Allow-TCP
+            properties:
+              protocol: Tcp
+              sourcePortRange: "*"
+              destinationPortRanges: "{{ tcp_ports | map('string') | list }}"
+              sourceAddressPrefix: "*"
+              destinationAddressPrefix: "*"
+              access: Allow
+              priority: 1000
+              direction: Inbound
+    status_code:
+      - 200
+      - 201
+  register: nsg_create
+
+###############################################################################
+# Wait for NSG Provisioning
+###############################################################################
+
+- name: Wait for Network Security Group
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}?api-version={{ api_network }}"
+    method: GET
+    headers: "{{ arm_headers }}"
+    status_code: 200
+  register: nsg_status
+  until: nsg_status.json.properties.provisioningState == "Succeeded"
+  retries: "{{ poll_retries }}"
+  delay: "{{ poll_delay }}"
+
+###############################################################################
+# Report NSG
+###############################################################################
+
+- name: Report NSG Status
+  ansible.builtin.debug:
+    msg:
+      - "Network Security Group created."
+      - "Provisioning State: {{ nsg_status.json.properties.provisioningState }}"
+
+###############################################################################
+# Part 4B - Public IP
+###############################################################################
+
+- name: Create Public IP Address
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}?api-version={{ api_network }}"
+    method: PUT
+    headers: "{{ arm_headers }}"
+    body_format: json
+    body:
+      location: "{{ location }}"
+      sku:
+        name: Standard
+      tags:
+        deploymentID: "{{ deploymentID }}"
+      properties:
+        publicIPAllocationMethod: Static
+        publicIPAddressVersion: IPv4
+    status_code:
+      - 200
+      - 201
+  register: pip_create
+
+###############################################################################
+# Wait for Public IP
+###############################################################################
+
+- name: Wait for Public IP Provisioning
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/publicIPAddresses/{{ public_ip_name }}?api-version={{ api_network }}"
+    method: GET
+    headers: "{{ arm_headers }}"
+    status_code: 200
+  register: pip_status
+  until: pip_status.json.properties.provisioningState == "Succeeded"
+  retries: "{{ poll_retries }}"
+  delay: "{{ poll_delay }}"
+
+###############################################################################
+# Report Public IP
+###############################################################################
+
+- name: Report Public IP
+  ansible.builtin.debug:
+    msg:
+      - "Public IP resource created."
+      - "Provisioning State: {{ pip_status.json.properties.provisioningState }}"
+
+###############################################################################
+# Part 4C - Network Interface
+###############################################################################
+
+- name: Create Network Interface
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version={{ api_network }}"
+    method: PUT
+    headers: "{{ arm_headers }}"
+    body_format: json
+    body:
+      location: "{{ location }}"
+      tags:
+        deploymentID: "{{ deploymentID }}"
+      properties:
+        networkSecurityGroup:
+          id: "{{ nsg_id }}"
+        ipConfigurations:
+          - name: ipconfig1
+            properties:
+              privateIPAllocationMethod: Dynamic
+              subnet:
+                id: "{{ subnet_id }}"
+              publicIPAddress:
+                id: "{{ pip_id }}"
+    status_code:
+      - 200
+      - 201
+  register: nic_create
+
+###############################################################################
+# Wait for NIC
+###############################################################################
+
+- name: Wait for Network Interface Provisioning
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}?api-version={{ api_network }}"
+    method: GET
+    headers: "{{ arm_headers }}"
+    status_code: 200
+  register: nic_status
+  until: nic_status.json.properties.provisioningState == "Succeeded"
+  retries: "{{ poll_retries }}"
+  delay: "{{ poll_delay }}"
+
+###############################################################################
+# Validate NIC
+###############################################################################
+
+- name: Validate Network Interface
+  ansible.builtin.debug:
+    msg:
+      - "Network Interface created."
+      - "Provisioning State: {{ nic_status.json.properties.provisioningState }}"
+      - "Private IP Allocation: {{ nic_status.json.properties.ipConfigurations[0].properties.privateIPAllocationMethod }}"
+
+###############################################################################
+# Part 7A - Create Virtual Machine
+###############################################################################
+
+- name: Create Virtual Machine
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version={{ api_compute }}"
+    method: PUT
+    headers: "{{ arm_headers }}"
+    body_format: json
+    body:
+      location: "{{ location }}"
+      tags:
+        deploymentID: "{{ deploymentID }}"
+      properties:
+        hardwareProfile:
+          vmSize: "{{ vm_size | default('Standard_B2s') }}"
+
+        storageProfile:
+          imageReference:
+            publisher: "{{ publisher }}"
+            offer: "{{ offer }}"
+            sku: "{{ sku }}"
+            version: latest
+
+          osDisk:
+            createOption: FromImage
+            managedDisk:
+              storageAccountType: Standard_LRS
+
+        osProfile:
+          computerName: "{{ vm_name }}"
+          adminUsername: "{{ username }}"
+          adminPassword: "{{ password }}"
+
+          linuxConfiguration:
+            disablePasswordAuthentication: false
+
+        networkProfile:
+          networkInterfaces:
+            - id: "{{ nic_id }}"
+              properties:
+                primary: true
+
+    status_code:
+      - 200
+      - 201
+      - 202
+
+  register: vm_create
+
+###############################################################################
+# Determine Async Poll URL
+###############################################################################
+
+- name: Determine Azure Async URL
+  ansible.builtin.set_fact:
+    azure_async_url: >-
+      {{
+        vm_create.azure_asyncoperation
+          | default(vm_create.location)
+          | default('')
+      }}
+
+###############################################################################
+# Show ARM Response
+###############################################################################
+
+- name: Display ARM Response
+  ansible.builtin.debug:
+    msg:
+      - "HTTP Status : {{ vm_create.status }}"
+      - "Async URL   : {{ azure_async_url | default('None') }}"
+
+###############################################################################
+# Part 7B - Poll Azure Long Running Operation
+###############################################################################
+
+- name: Poll Azure Async Operation
+  when: azure_async_url | length > 0
+  ansible.builtin.uri:
+    url: "{{ azure_async_url }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ token_response.json.access_token }}"
+    status_code: 200
+  register: vm_async_status
+
+  until: >
+    vm_async_status.json.status is defined and
+    vm_async_status.json.status in ['Succeeded','Failed','Canceled']
+
+  retries: 90
+  delay: 10
+
+###############################################################################
+# Display Async Status
+###############################################################################
+
+- name: Display Azure Async Status
+  when:
+    - azure_async_url | length > 0
+    - vm_async_status.json.status is defined
+  ansible.builtin.debug:
+    msg:
+      - "Azure Async Status : {{ vm_async_status.json.status }}"
+
+###############################################################################
+# Fail if Azure reports failure
+###############################################################################
+
+- name: Fail when Azure reports provisioning failure
+  when:
+    - azure_async_url | length > 0
+    - vm_async_status.json.status == "Failed"
+  ansible.builtin.fail:
+    msg: |
+      Azure VM deployment failed.
+
+      {{ vm_async_status.json | to_nice_json }}
+
+###############################################################################
+# No Async URL returned
+###############################################################################
+
+- name: Azure did not return Azure-AsyncOperation header
+  when: azure_async_url | length == 0
+  ansible.builtin.debug:
+    msg:
+      - "Azure returned no Azure-AsyncOperation URL."
+      - "Falling back to provisioningState polling."
+
+###############################################################################
+# Poll VM provisioningState
+###############################################################################
+
+- name: Wait for VM Provisioning
+  when: azure_async_url | length == 0
+  ansible.builtin.uri:
+    url: "{{ vm_id }}?api-version={{ api_compute }}"
+    method: GET
+    headers: "{{ arm_headers }}"
+    status_code: 200
+  register: vm_status
+
+  until: >
+    vm_status.json.properties.provisioningState is defined and
+    vm_status.json.properties.provisioningState == "Succeeded"
+
+  retries: 90
+  delay: 10
+
+###############################################################################
+# Display Provisioning State
+###############################################################################
+
+- name: Display VM Provisioning State
+  when: azure_async_url | length == 0
+  ansible.builtin.debug:
+    msg:
+      - "Provisioning State : {{ vm_status.json.properties.provisioningState }}"
+
+###############################################################################
+# Part 8 - Retrieve VM Information
+###############################################################################
+
+- name: Get Virtual Machine Details
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}?api-version={{ api_compute }}"
+    method: GET
+    headers: "{{ arm_headers }}"
+    status_code: 200
+  register: vm_info
+
+###############################################################################
+# Extract NIC Resource ID
+###############################################################################
+
+- name: Save Network Interface ID
+  ansible.builtin.set_fact:
+    vm_nic_id: "{{ vm_info.json.properties.networkProfile.networkInterfaces[0].id }}"
+
+###############################################################################
+# Retrieve NIC
+###############################################################################
+
+- name: Get Network Interface Details
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}{{ vm_nic_id }}?api-version={{ api_network }}"
+    method: GET
+    headers: "{{ arm_headers }}"
+    status_code: 200
+  register: nic_info
+
+###############################################################################
+# Extract Private IP
+###############################################################################
+
+- name: Save Private IP Address
+  ansible.builtin.set_fact:
+    private_ip: "{{ nic_info.json.properties.ipConfigurations[0].properties.privateIPAddress }}"
+
+###############################################################################
+# Extract Public IP Resource ID
+###############################################################################
+
+- name: Save Public IP Resource ID
+  ansible.builtin.set_fact:
+    public_ip_resource_id: >-
+      {{
+        nic_info.json.properties.ipConfigurations[0].properties.publicIPAddress.id
+        | default('')
+      }}
+
+###############################################################################
+# Retrieve Public IP
+###############################################################################
+
+- name: Get Public IP Details
+  when: public_ip_resource_id | length > 0
+  ansible.builtin.uri:
+    url: "{{ arm_endpoint }}{{ public_ip_resource_id }}?api-version={{ api_network }}"
+    method: GET
+    headers: "{{ arm_headers }}"
+    status_code: 200
+  register: public_ip_info
+
+###############################################################################
+# Save Public IP Address
+###############################################################################
+
+- name: Save Public IP Address
+  when: public_ip_resource_id | length > 0
+  ansible.builtin.set_fact:
+    public_ip: "{{ public_ip_info.json.properties.ipAddress | default('Pending') }}"
+
+###############################################################################
+# VM Provisioning Summary
+###############################################################################
+
+- name: Display VM Information
+  ansible.builtin.debug:
+    msg:
+      - "----------------------------------------------------"
+      - "Virtual Machine Information"
+      - "----------------------------------------------------"
+      - "VM Name              : {{ vm_name }}"
+      - "Location             : {{ location }}"
+      - "VM Size              : {{ vm_info.json.properties.hardwareProfile.vmSize }}"
+      - "Provisioning State   : {{ vm_info.json.properties.provisioningState }}"
+      - "Private IP           : {{ private_ip }}"
+      - "Public IP            : {{ public_ip | default('None') }}"
+      - "NIC ID               : {{ vm_nic_id }}"
+      - "----------------------------------------------------"

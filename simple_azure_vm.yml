@@ -23,7 +23,7 @@
         secret: "{{ azure_secret }}"
         tenant: "{{ azure_tenant }}"
         subscription_id: "{{ azure_subscription_id }}"
-        auth_source: explicit
+        auth_source: env
         name: "{{ resource_group }}"
         location: "{{ location }}"
         tags:
@@ -35,7 +35,7 @@
         secret: "{{ azure_secret }}"
         tenant: "{{ azure_tenant }}"
         subscription_id: "{{ azure_subscription_id }}"
-        auth_source: explicit
+        auth_source: env
         resource_group: "{{ resource_group }}"
         name: "{{ network_name }}"
         address_prefixes:
@@ -49,7 +49,7 @@
         secret: "{{ azure_secret }}"
         tenant: "{{ azure_tenant }}"
         subscription_id: "{{ azure_subscription_id }}"
-        auth_source: explicit
+        auth_source: env
         resource_group: "{{ resource_group }}"
         name: "{{ subnet_name }}"
         address_prefix: "{{ subnet_cidr }}"
@@ -61,7 +61,7 @@
         secret: "{{ azure_secret }}"
         tenant: "{{ azure_tenant }}"
         subscription_id: "{{ azure_subscription_id }}"
-        auth_source: explicit
+        auth_source: env
         resource_group: "{{ resource_group }}"
         name: "{{ security_group }}"
         rules:
@@ -80,7 +80,7 @@
         secret: "{{ azure_secret }}"
         tenant: "{{ azure_tenant }}"
         subscription_id: "{{ azure_subscription_id }}"
-        auth_source: explicit
+        auth_source: env
         name: "{{ nic_name }}"
         resource_group: "{{ resource_group }}"
         virtual_network: "{{ network_name }}"
@@ -98,7 +98,7 @@
         secret: "{{ azure_secret }}"
         tenant: "{{ azure_tenant }}"
         subscription_id: "{{ azure_subscription_id }}"
-        auth_source: explicit
+        auth_source: env
         resource_group: "{{ resource_group }}"
         name: "{{ vm_name }}"
         vm_size: Standard_DS1_v2

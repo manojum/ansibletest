@@ -45,7 +45,11 @@
           client_secret: "{{ azure_secret }}"
         status_code: 200
       register: token_response
-      no_log: true # Prevents the runtime token from printing to the job logs
+      no_log: true 
+
+    - name: Report Token Authentication Status
+      ansible.builtin.debug:
+        msg: "Step 1/6: OAuth Authentication successful. Token obtained from Microsoft Identity Platform."
 
     - name: Create resource group
       ansible.builtin.uri:
@@ -60,6 +64,11 @@
           location: "{{ location }}"
           tags:
             deploymentID: "{{ deploymentID }}"
+      register: rg_output
+
+    - name: Report Resource Group Deployment Status
+      ansible.builtin.debug:
+        msg: "Step 2/6: Resource Group Deployment responded with HTTP Status: {{ rg_output.status }} (ProvisioningState: {{ rg_output.json.properties.provisioningState | default('N/A') }})"
 
     - name: Create virtual network and subnet
       ansible.builtin.uri:
@@ -82,6 +91,11 @@
               - name: "{{ subnet_name }}"
                 properties:
                   addressPrefix: "{{ subnet_cidr }}"
+      register: vnet_output
+
+    - name: Report Virtual Network Deployment Status
+      ansible.builtin.debug:
+        msg: "Step 3/6: Virtual Network & Subnet Deployment responded with HTTP Status: {{ vnet_output.status }} (ProvisioningState: {{ vnet_output.json.properties.provisioningState | default('N/A') }})"
 
     - name: Create Network Security Group
       ansible.builtin.uri:
@@ -108,6 +122,11 @@
                   sourceAddressPrefix: '*'
                   sourcePortRange: '*'
                   destinationAddressPrefix: '*'
+      register: nsg_output
+
+    - name: Report Network Security Group Deployment Status
+      ansible.builtin.debug:
+        msg: "Step 4/6: Network Security Group Deployment responded with HTTP Status: {{ nsg_output.status }} (ProvisioningState: {{ nsg_output.json.properties.provisioningState | default('N/A') }})"
 
     - name: Create network interface
       ansible.builtin.uri:
@@ -131,6 +150,11 @@
                     id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/virtualNetworks/{{ network_name }}/subnets/{{ subnet_name }}"
                   networkSecurityGroup:
                     id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkSecurityGroups/{{ security_group }}"
+      register: nic_output
+
+    - name: Report Network Interface Deployment Status
+      ansible.builtin.debug:
+        msg: "Step 5/6: Network Interface Deployment responded with HTTP Status: {{ nic_output.status }} (ProvisioningState: {{ nic_output.json.properties.provisioningState | default('N/A') }})"
 
     - name: Create VM with Managed Disk
       ansible.builtin.uri:
@@ -166,3 +190,8 @@
             networkProfile:
               networkInterfaces:
                 - id: "/subscriptions/{{ azure_subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Network/networkInterfaces/{{ nic_name }}"
+      register: vm_output
+
+    - name: Report Virtual Machine Deployment Status
+      ansible.builtin.debug:
+        msg: "Step 6/6: Virtual Machine Deployment request completed with HTTP Status: {{ vm_output.status }} (ProvisioningState: {{ vm_output.json.properties.provisioningState | default('Accepted/Creating') }})"

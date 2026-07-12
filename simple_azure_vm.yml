@@ -4,44 +4,38 @@
   connection: local
   gather_facts: no
 
+  collections:
+    - azure.azcollection
+
   vars:
     deploymentID: "{{ deploymentID }}"
     location: "{{ location }}"
+    # Read the credentials provided by your attached Azure Template Credential
     azure_client_id: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
     azure_secret: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
     azure_tenant: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
     azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
 
   tasks:
-    - name: Obtain Azure REST API Access Token
-      ansible.builtin.uri:
-        url: "https://login.microsoftonline.com/{{ azure_tenant }}/oauth2/v2.0/token"
-        method: POST
-        body_format: form-urlencoded
-        body:
-          client_id: "{{ azure_client_id }}"
-          grant_type: client_credentials
-          scope: "https://azure.com"
-          client_secret: "{{ azure_secret }}"
-        status_code: 200
-      register: token_response
-
-    - name: Create resource group via Native REST API
-      ansible.builtin.uri:
-        url: "https://azure.com{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
-        method: PUT
-        status_code: [200, 201]
-        headers:
-          Authorization: "Bearer {{ token_response.json.access_token }}"
-          Content-Type: "application/json"
-        body_format: json
-        body:
-          location: "{{ location }}"
-          tags:
-            deploymentID: "{{ deploymentID }}"
+    - name: Create resource group
+      azure_rm_resourcegroup:
+        client_id: "{{ azure_client_id }}"
+        secret: "{{ azure_secret }}"
+        tenant: "{{ azure_tenant }}"
+        subscription_id: "{{ azure_subscription_id }}"
+        auth_source: explicit
+        name: "{{ resource_group }}"
+        location: "{{ location }}"
+        tags:
+          deploymentID: "{{ deploymentID }}"
 
     - name: Create virtual network
       azure_rm_virtualnetwork:
+        client_id: "{{ azure_client_id }}"
+        secret: "{{ azure_secret }}"
+        tenant: "{{ azure_tenant }}"
+        subscription_id: "{{ azure_subscription_id }}"
+        auth_source: explicit
         resource_group: "{{ resource_group }}"
         name: "{{ network_name }}"
         address_prefixes:
@@ -51,6 +45,11 @@
 
     - name: Add subnet
       azure_rm_subnet:
+        client_id: "{{ azure_client_id }}"
+        secret: "{{ azure_secret }}"
+        tenant: "{{ azure_tenant }}"
+        subscription_id: "{{ azure_subscription_id }}"
+        auth_source: explicit
         resource_group: "{{ resource_group }}"
         name: "{{ subnet_name }}"
         address_prefix: "{{ subnet_cidr }}"
@@ -58,6 +57,11 @@
 
     - name: Create Network Security Group
       azure_rm_securitygroup:
+        client_id: "{{ azure_client_id }}"
+        secret: "{{ azure_secret }}"
+        tenant: "{{ azure_tenant }}"
+        subscription_id: "{{ azure_subscription_id }}"
+        auth_source: explicit
         resource_group: "{{ resource_group }}"
         name: "{{ security_group }}"
         rules:
@@ -72,6 +76,11 @@
 
     - name: Create network interface
       azure_rm_networkinterface:
+        client_id: "{{ azure_client_id }}"
+        secret: "{{ azure_secret }}"
+        tenant: "{{ azure_tenant }}"
+        subscription_id: "{{ azure_subscription_id }}"
+        auth_source: explicit
         name: "{{ nic_name }}"
         resource_group: "{{ resource_group }}"
         virtual_network: "{{ network_name }}"
@@ -85,6 +94,11 @@
 
     - name: Create VM with Managed Disk
       azure_rm_virtualmachine:
+        client_id: "{{ azure_client_id }}"
+        secret: "{{ azure_secret }}"
+        tenant: "{{ azure_tenant }}"
+        subscription_id: "{{ azure_subscription_id }}"
+        auth_source: explicit
         resource_group: "{{ resource_group }}"
         name: "{{ vm_name }}"
         vm_size: Standard_DS1_v2

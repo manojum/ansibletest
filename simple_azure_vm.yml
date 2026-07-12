@@ -4,34 +4,42 @@
   connection: local
   gather_facts: no
 
-  collections:
-    - azure.azcollection
-
   vars:
     deploymentID: "{{ deploymentID }}"
     location: "{{ location }}"
-
-  pre_tasks:
-    - name: Ensure fallback Azure dependencies are satisfied inside the execution environment
-      ansible.builtin.pip:
-        requirements: "{{ playbook_dir }}/requirements.txt"
-        extra_args: --user
-
-  # This forces the modules to bypass the broken CLI fallback lookup
-  environment:
-    AZURE_CLIENT_ID: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
-    AZURE_SECRET: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
-    AZURE_TENANT: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
-    AZURE_SUBSCRIPTION_ID: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
+    # Safely pull credentials exposed by your attached Azure Template Credential
+    azure_client_id: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
+    azure_secret: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
+    azure_tenant: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
+    azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
 
   tasks:
-    - name: Create resource group
-      azure_rm_resourcegroup:
-        name: "{{ resource_group }}"
-        location: "{{ location }}"
-        auth_source: credential_file  # Explicitly prevents 'auto' CLI lookup
-        tags:
-          deploymentID: "{{ deploymentID }}"
+    - name: Obtain Azure REST API Access Token
+      ansible.builtin.uri:
+        url: "https://microsoftonline.com{{ azure_tenant }}/oauth2/v2.0/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          client_id: "{{ azure_client_id }}"
+          grant_type: client_credentials
+          scope: "https://azure.com"
+          client_secret: "{{ azure_secret }}"
+        status_code: 200
+      register: token_response
+
+    - name: Create resource group via Native REST API
+      ansible.builtin.uri:
+        url: "https://azure.com{{ azure_subscription_id }}/resourcegroups/{{ resource_group }}?api-version=2021-04-01"
+        method: PUT
+        status_code: [200, 201]
+        headers:
+          Authorization: "Bearer {{ token_response.json.access_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          location: "{{ location }}"
+          tags:
+            deploymentID: "{{ deploymentID }}"
 
     - name: Create virtual network
       azure_rm_virtualnetwork:

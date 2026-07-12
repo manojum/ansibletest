@@ -20,7 +20,7 @@
         body:
           client_id: "{{ azure_client_id }}"
           grant_type: client_credentials
-          scope: "https://azure.com"
+          scope: "https://management.azure.com/.default"
           client_secret: "{{ azure_secret }}"
         status_code: 200
       register: token_response

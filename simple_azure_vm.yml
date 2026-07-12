@@ -10,11 +10,20 @@
   vars:
     deploymentID: "{{ deploymentID }}"
     location: "{{ location }}"
-    # Read the credentials provided by your attached Azure Template Credential
     azure_client_id: "{{ lookup('ansible.builtin.env', 'AZURE_CLIENT_ID') }}"
     azure_secret: "{{ lookup('ansible.builtin.env', 'AZURE_SECRET') }}"
     azure_tenant: "{{ lookup('ansible.builtin.env', 'AZURE_TENANT') }}"
     azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
+
+  pre_tasks:
+    - name: Dynamically fix broken collection ADAL imports inside container
+      ansible.builtin.shell: |
+        PYTHON_SITE=$(python3 -c "import site; print(site.getsitepackages()[0])")
+        mkdir -p "$PYTHON_SITE/azure/cli/core/auth"
+        touch "$PYTHON_SITE/azure/cli/core/__init__.py"
+        touch "$PYTHON_SITE/azure/cli/core/auth/__init__.py"
+        echo "class MSIAuthenticationWrapper: pass" > "$PYTHON_SITE/azure/cli/core/auth/adal_authentication.py"
+      changed_when: false
 
   tasks:
     - name: Create resource group

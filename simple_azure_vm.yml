@@ -16,14 +16,21 @@
     azure_subscription_id: "{{ lookup('ansible.builtin.env', 'AZURE_SUBSCRIPTION_ID') }}"
 
   pre_tasks:
-    - name: Force install legacy and missing cloud modules globally inside the container
+    - name: Force install legacy and missing cloud modules
       ansible.builtin.pip:
         name:
           - "azure-mgmt-datalake-store"
           - "azure-mgmt-postgresqlflexibleservers"
-          - "azure-cli-core==2.34.0" # Keeps old ADAL wrapper intact for initialization
+          - "azure-cli-core==2.34.0"
         extra_args: "--break-system-packages"
       ignore_errors: true
+
+    - name: Monkeypatch inspect.getargspec for Python 3.11 compatibility
+      ansible.builtin.shell: |
+        PYTHON_SITE=$(python3 -c "import site; print(site.getsitepackages()[0])")
+        mkdir -p "$PYTHON_SITE"
+        echo -e "import inspect\nif not hasattr(inspect, 'getargspec'):\n    inspect.getargspec = inspect.getfullargspec" > "$PYTHON_SITE/sitecustomize.py"
+      changed_when: false
 
   tasks:
     - name: Create resource group

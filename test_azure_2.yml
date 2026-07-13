@@ -85,7 +85,7 @@
                 properties:
                   protocol: Tcp
                   sourcePortRange: "*"
-                  destinationPortRanges: "{{ tcp_ports | from_json }}"
+                  destinationPortRanges: "{{ tcp_ports | from_yaml | map('string') | list }}"
                   sourceAddressPrefix: "*"
                   destinationAddressPrefix: "*"
                   access: Allow

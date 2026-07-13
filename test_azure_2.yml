@@ -85,7 +85,7 @@
                 properties:
                   protocol: Tcp
                   sourcePortRange: "*"
-                  destinationPortRanges: "{{ tcp_ports | map('string') | list }}"
+                  destinationPortRanges: "{{ tcp_ports | from_json }}"
                   sourceAddressPrefix: "*"
                   destinationAddressPrefix: "*"
                   access: Allow
